@@ -1,0 +1,157 @@
+Sure! Here's a sample configuration for an NFS client provisioner in Kubernetes:
+
+1. Create a Kubernetes ConfigMap named `nfs-client-provisioner-config` to store the NFS server details. Replace `<nfs-server-ip>` with the IP address of your NFS server:
+
+   ```yaml
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     name: nfs-client-provisioner-config
+   data:
+     nfs-server: "<nfs-server-ip>"
+     nfs-path: "/exported/path"
+   ```
+
+2. Create a Service Account for the provisioner:
+
+   ```yaml
+   apiVersion: v1
+   kind: ServiceAccount
+   metadata:
+     name: nfs-client-provisioner-sa
+     namespace: default
+   ```
+
+3. Create a Cluster Role to define the necessary permissions for the provisioner:
+
+   ```yaml
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: ClusterRole
+   metadata:
+     name: nfs-client-provisioner-cr
+   rules:
+     - apiGroups: [""]
+       resources: ["persistentvolumes"]
+       verbs: ["get", "create", "delete"]
+     - apiGroups: [""]
+       resources: ["persistentvolumeclaims"]
+       verbs: ["get", "create", "delete"]
+     - apiGroups: [""]
+       resources: ["events"]
+       verbs: ["create", "patch"]
+   ```
+
+4. Bind the Cluster Role to the Service Account:
+
+   ```yaml
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: ClusterRoleBinding
+   metadata:
+     name: nfs-client-provisioner-crb
+   subjects:
+     - kind: ServiceAccount
+       name: nfs-client-provisioner-sa
+       namespace: default
+   roleRef:
+     kind: ClusterRole
+     name: nfs-client-provisioner-cr
+     apiGroup: rbac.authorization.k8s.io
+   ```
+
+5. Create a Deployment for the NFS client provisioner:
+
+   ```yaml
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: nfs-client-provisioner
+   spec:
+     replicas: 1
+     selector:
+       matchLabels:
+         app: nfs-client-provisioner
+     template:
+       metadata:
+         labels:
+           app: nfs-client-provisioner
+       spec:
+         serviceAccountName: nfs-client-provisioner-sa
+         containers:
+           - name: nfs-client-provisioner
+             image: quay.io/external_storage/nfs-client-provisioner:v3.1.0-k8s1.11
+             env:
+               - name: PROVISIONER_NAME
+                 value: "example.com/nfs"
+               - name: NFS_SERVER
+                 valueFrom:
+                   configMapKeyRef:
+                     name: nfs-client-provisioner-config
+                     key: nfs-server
+               - name: NFS_PATH
+                 valueFrom:
+                   configMapKeyRef:
+                     name: nfs-client-provisioner-config
+                     key: nfs-path
+   ```
+
+   Note: Adjust the image version according to your Kubernetes version.
+
+6. Apply the configurations:
+
+   ```bash
+   kubectl apply -f nfs-client-provisioner-config.yaml
+   kubectl apply -f nfs-client-provisioner-sa.yaml
+   kubectl apply -f nfs-client-provisioner-cr.yaml
+   kubectl apply -f nfs-client-provisioner-crb.yaml
+   kubectl apply -f nfs-client-provisioner-deployment.yaml
+   ```
+
+The NFS client provisioner will now be deployed in your cluster. It will monitor PersistentVolumeClaim (PVC) objects with the annotation
+
+
+...
+
+
+7. Certainly! Here's an updated version of the sample configuration that includes a StorageClass for the creation of PersistentVolumes (PVs):
+
+    Create a StorageClass named nfs-client-storage to define the provisioning parameters for the NFS PVs:
+
+    yaml
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-client-storage
+provisioner: example.com/nfs
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+
+With the addition of the StorageClass, you can now create PersistentVolumeClaims (PVCs) that will be dynamically provisioned as PVs backed by the NFS server using the specified StorageClass (nfs-client-storage).
+
+...
+8. Certainly! Here's an example of a PersistentVolumeClaim (PVC) definition that can be used to dynamically create a PersistentVolume (PV) backed by the NFS server using the previously defined StorageClass (nfs-client-storage):
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-client-storage
+  resources:
+    requests:
+      storage: 5Gi
+
+In this example, we create a PVC named my-pvc with the following characteristics:
+
+    accessModes: Specifies the access mode for the PVC. In this case, it is set to ReadWriteOnce, indicating that the PVC can be mounted as read-write by a single node.
+    storageClassName: Specifies the name of the StorageClass to use for provisioning the PV. Here, we set it to nfs-client-storage, which we defined earlier.
+    resources: Specifies the requested storage size for the PVC. In this example, it is set to 5Gi, indicating a request for 5 gigabytes of storage.
+
+To create the PV, you can apply the PVC definition using the following command:
+
+kubectl apply -f pvc-definition.yaml
+
+
+Kubernetes will automatically provision a PV that satisfies the requirements specified in the PVC definition. The PV will be backed by the NFS server and will be dynamically provisioned based on the StorageClass settings.
